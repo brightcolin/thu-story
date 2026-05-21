@@ -1,0 +1,18 @@
+# Unity 编译产物（单文件过大，超出 GitHub 100 MB 限制）
+game-build/
+
+# 答辩材料（不公开）
+docs/final-defense-notes.pdf
+docs/defense-presentation.pptx
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+source-code/backend/venv/
+source-code/backend/.env
+source-code/backend/qinghua_story.db
+
+# OS
+.DS_Store
+Thumbs.db
