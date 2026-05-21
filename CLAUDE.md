@@ -80,14 +80,14 @@ Pre-built executable: `game-build/game.exe`
 
 **Module layout:**
 - `API/` — Backend integration: `BackendModelsV21.cs` (request/response models), `ApiTransport.cs` (HTTP transport), `ServerActivityFlow.cs`, `ServerAttendClassFlow.cs`, `ServerPauseCoordinator.cs` (per-feature flow controllers), plus schedule/penalty/social utilities
-- Activity system: `ActivityTrigger.cs`, `ActivityBehaveTriggerMap.cs`, `ActivityPresentationUI.cs`
-- Class tracking: `ClassPeriodAutoAbsenceMonitor.cs`, `ClassPeriodNotifier.cs`
-- Meal system: `MealDeadlineCrossingDetector.cs`, `MealMissUIPanel.cs`, `MealReminderUiGate.cs`, `MealMissPenaltyMonitor.cs`
-- Ambient monitors: `LibraryHoursMonitor.cs`, `LateNightCurfewMonitor.cs`
-- Academic UI: `CourseSelectionUI.cs`, `ScheduleViewUI.cs`, `SemesterTranscriptUI.cs`
-- NPC/social: `NPCManager.cs`, `NPCInteraction.cs`, `FriendshipPersistence.cs`, `DialogueBox.cs`
-- Player: `PlayerManager.cs`, `PlayerStatsSnapshot.cs`, `MyCoursesSnapshotCache.cs`
-- HUD: `GameHUD.cs`, `GameTimeHUD.cs`, `DailySummaryUI.cs`
+- `Activities/` — Activity trigger and presentation: `ActivityTrigger.cs`, `ActivityBehaveTriggerMap.cs`, `ActivityPresentationUI.cs`, `SceneRActivityUI.cs`, `LibrarySelfStudyUI.cs`
+- `Monitors/` — Ambient background monitors that poll server time: `ClassPeriodAutoAbsenceMonitor.cs`, `ClassPeriodNotifier.cs`, `LateNightCurfewMonitor.cs`, `LibraryHoursMonitor.cs`, `MealDeadlineCrossingDetector.cs`, `MealMissPenaltyMonitor.cs`, `DayEndSummaryMonitor.cs`
+- `Courses/` — Academic UI and data: `CourseSelectionUI.cs`, `ScheduleViewUI.cs`, `SemesterTranscriptUI.cs`, `MyCoursesSnapshotCache.cs`
+- `NPC/` — NPC and social systems: `NPCManager.cs`, `NPCInteraction.cs`, `FriendshipPersistence.cs`, `DialogueBox.cs`
+- `Player/` — Player state and movement: `PlayerManager.cs`, `PlayerControl.cs`, `PlayerStatsSnapshot.cs`, `PlayerStatsText.cs`
+- `HUD/` — Heads-up display and in-game overlays: `GameHUD.cs`, `GameTimeHUD.cs`, `DailySummaryUI.cs`, `DailyProgressBaseline.cs`, `BackendGameplayMenu.cs`, meal miss UI
+- `Scene/` — Scene transitions, camera, and scene-level buttons: `SceneTransition.cs`, `PanelController.cs`, `FixedCameraSize.cs`, `FixedResolutionCamera.cs`, `PlayButton.cs`, `ExitButton.cs`, `GameTimeRestart.cs`
+- `Utils/` — Utilities: `MathUtils.cs`, `ThustoryUIFont.cs`, `GetSpriteCorners.cs`
 - `Editor/` — Unity editor utilities
 
 ## Architecture Notes
