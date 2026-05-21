@@ -74,10 +74,20 @@ python main.py
 
 ```
 source-code/
-  backend/          # FastAPI 后端（4 个核心文件）
-  csharp-client/    # Unity C# 脚本（~130 个文件）
-docs/               # 系统设计文档、前端对接说明、部署指南
-media/              # 截图与演示视频
+  backend/                  # FastAPI 后端（4 个核心文件）
+  csharp-client/
+    API/                    # 后端接口层：请求模型、HTTP 传输、流程控制器
+    Editor/                 # Unity 编辑器工具
+    Activities/             # 活动触发与展示 UI
+    Monitors/               # 后台轮询监控器（宵禁、缺餐、课程缺勤等）
+    Courses/                # 课程选课、课表、学期成绩单
+    NPC/                    # NPC 管理、对话框、好感系统
+    Player/                 # 玩家状态管理与移动控制
+    HUD/                    # HUD 与游戏内菜单叠层
+    Scene/                  # 场景切换、摄像机、场景级按钮
+    Utils/                  # 工具类（字体、数学、精灵工具）
+docs/                       # 系统设计文档、前端对接说明、玩法说明、部署指南
+media/                      # 截图与演示视频
 ```
 
 ---
