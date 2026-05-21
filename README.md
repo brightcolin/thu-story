@@ -66,7 +66,7 @@ python main.py
 # → http://localhost:8000/docs
 ```
 
-运行游戏：直接打开 `game-build/game.exe`（需要后端在线，或将 APIManager.cs 中的 URL 改为 `http://localhost:8000`）。
+运行游戏：直接打开 `game-build/game.exe`（需要后端在线，或将 `API/APIManager.cs` 中的 URL 改为 `http://localhost:8000`）。预编译可执行文件体积超过 GitHub 限制，未包含在此仓库中，可联系作者获取。
 
 ---
 
@@ -104,6 +104,7 @@ media/                      # 截图与演示视频
 
 ## 文档
 
+- [`docs/gameplay-guide.md`](docs/gameplay-guide.md) — 玩家玩法说明（四条人生线、解锁条件、风险提示）
 - [`docs/game-systems-design.md`](docs/game-systems-design.md) — 养成系统触发条件与属性公式
 - [`docs/frontend-api-guide.md`](docs/frontend-api-guide.md) — 前后端接口规格（v2.2）
 - [`docs/deployment-guide.md`](docs/deployment-guide.md) — 服务器部署说明
