@@ -16,3 +16,6 @@ source-code/backend/qinghua_story.db
 # OS
 .DS_Store
 Thumbs.db
+
+# Local coding-agent settings
+.claude/
