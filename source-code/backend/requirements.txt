@@ -1,8 +1,6 @@
-# 《清华园物语》后端依赖 v2.1
-fastapi>=0.100.0
-uvicorn>=0.20.0
-openai>=1.0.0
-pydantic>=2.0.0
-python-dotenv>=1.0.0
-pytest>=7.0.0
-httpx>=0.24.0
+# 《清华园物语》后端依赖 v2.2
+fastapi>=0.100.0,<1.0
+uvicorn>=0.20.0,<1.0
+openai>=1.0.0,<3.0
+pydantic>=2.0.0,<3.0
+python-dotenv>=1.0.0,<2.0

@@ -13,7 +13,7 @@ load_dotenv()
 import os, secrets
 from typing import Optional, List
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
 from fastapi.security import APIKeyHeader
@@ -25,18 +25,19 @@ if not API_TOKEN:
     print(f"[WARN] API_TOKEN 未设置，已自动生成: {API_TOKEN}")
 
 async def verify_token(x_token: str = Depends(api_key_header)):
-    if x_token != API_TOKEN:
+    if not secrets.compare_digest(x_token, API_TOKEN):
         raise HTTPException(status_code=401, detail="无效的访问令牌",
                             headers={"WWW-Authenticate": "X-Token"})
     return x_token
 
 from database import (
-    init_db, reset_save, get_player_state, update_player_state,
+    init_db, reset_save, get_player_state,
     get_all_npc_friendships, get_all_unlock_flags,
     get_courses_for_semester, select_course, get_player_schedule,
     get_player_courses, check_endings, pause_game, resume_game,
-    get_current_game_minutes, time_info_from_minutes, add_game_minutes,
-    semester_transition,
+    get_current_game_minutes, add_game_minutes,
+    semester_transition, get_pending_semester_transition,
+    update_player_state_absolute, MINUTES_PER_DAY,
 )
 from npc_engine import (
     generate_reply, get_npc_info, get_all_npcs, PlayerStats, NPC_CONFIGS,
@@ -58,9 +59,14 @@ async def lifespan(app: FastAPI):
     print("[BYE] 服务关闭")
 
 app = FastAPI(title="清华园物语 API", version="2.2.0", lifespan=lifespan)
-ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "*").split(",")
+ALLOWED_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv("ALLOWED_ORIGINS", "*").split(",")
+    if origin.strip()
+]
 app.add_middleware(CORSMiddleware, allow_origins=ALLOWED_ORIGINS,
-                   allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+                   allow_credentials="*" not in ALLOWED_ORIGINS,
+                   allow_methods=["*"], allow_headers=["*"])
 
 # ─── 请求模型 ───
 
@@ -91,9 +97,23 @@ class ActivityRequest(BaseModel):
         if v not in ACTIVITIES: raise ValueError(f"无效的活动ID: {v}")
         return v
 
+class CourseScheduleSlot(BaseModel):
+    day_of_week: int = Field(..., ge=0, le=6)
+    period: int = Field(..., ge=1, le=4)
+
 class CourseSelectRequest(BaseModel):
     course_id: str
-    schedule: List[dict] = Field(..., description='[{"day_of_week":0,"period":1}]')
+    schedule: List[CourseScheduleSlot] = Field(
+        ..., min_length=1, max_length=14,
+        description='[{"day_of_week":0,"period":1}]',
+    )
+    @field_validator('schedule')
+    @classmethod
+    def validate_unique_schedule(cls, value):
+        slots = [(slot.day_of_week, slot.period) for slot in value]
+        if len(slots) != len(set(slots)):
+            raise ValueError("课表中存在重复时段")
+        return value
 
 class AttendClassRequest(BaseModel):
     course_id: str
@@ -102,10 +122,10 @@ class JoinSocialOrgRequest(BaseModel):
     org_type: str
 
 class PlayerStateUpdate(BaseModel):
-    energy: Optional[int] = None
-    health: Optional[int] = None
-    research_ability: Optional[int] = None
-    social_ability: Optional[int] = None
+    energy: Optional[int] = Field(default=None, ge=0, le=100)
+    health: Optional[int] = Field(default=None, ge=0, le=100)
+    research_ability: Optional[int] = Field(default=None, ge=0, le=100)
+    social_ability: Optional[int] = Field(default=None, ge=0, le=100)
 
 # ─── 系统 ───
 
@@ -152,7 +172,7 @@ async def get_player():
 async def do_update_player(update: PlayerStateUpdate):
     changes = {k: v for k, v in update.model_dump().items() if v is not None}
     if not changes: raise HTTPException(status_code=400, detail="无有效更新字段")
-    return {"player": update_player_state(changes)}
+    return {"player": update_player_state_absolute(changes)}
 
 # ─── 活动系统 ───
 
@@ -187,7 +207,7 @@ async def do_resume():
     return {"paused": False, "time": get_time_info()}
 
 @app.post("/time/advance", tags=["时间系统"], dependencies=[Depends(verify_token)])
-async def do_advance(minutes: int = 10):
+async def do_advance(minutes: int = Query(default=10, ge=1, le=MINUTES_PER_DAY)):
     add_game_minutes(minutes)
     return {"advanced": minutes, "time": get_time_info()}
 
@@ -208,7 +228,8 @@ async def get_avail_courses():
 
 @app.post("/courses/select", tags=["课程系统"], dependencies=[Depends(verify_token)])
 async def do_select_course(req: CourseSelectRequest):
-    if not select_course(req.course_id, req.schedule):
+    schedule = [slot.model_dump() for slot in req.schedule]
+    if not select_course(req.course_id, schedule):
         raise HTTPException(status_code=400, detail="选课失败")
     return {"success": True, "course_id": req.course_id}
 
@@ -255,11 +276,9 @@ async def do_semester_transition():
     手动触发学期交割（冻结课程→计算GPA→清空课表→写入gpa_committed）。
     通常由时间推进自动触发，此接口用于手动/补偿调用。
     """
-    state = get_player_state()
-    sem = state.get("semester_index", 0)
-    if sem <= 0:
-        # 检查是否有课需要交割
-        pass
+    sem = get_pending_semester_transition()
+    if sem is None:
+        raise HTTPException(status_code=409, detail="没有待交割的已结束学期")
     cum_gpa, detail = semester_transition(sem)
     return {"success": True, "semester_settled": sem,
             "cumulative_gpa": cum_gpa, "detail": detail,
@@ -306,7 +325,7 @@ async def export_save():
             "schedule": get_player_schedule()}
 
 @app.get("/admin/all_logs", tags=["管理"], dependencies=[Depends(verify_token)])
-async def get_all_logs(limit: int = 50):
+async def get_all_logs(limit: int = Query(default=50, ge=1, le=500)):
     from database import get_connection
     conn = get_connection(); conn.row_factory = __import__('sqlite3').Row; c = conn.cursor()
     c.execute("SELECT * FROM activity_log ORDER BY id DESC LIMIT ?", (limit,))

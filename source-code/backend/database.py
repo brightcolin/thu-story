@@ -168,7 +168,8 @@ def set_game_minutes(minutes: float):
 # ═══════════════════════════════════════════
 
 def init_db():
-    conn = sqlite3.connect(DB_NAME); c = conn.cursor()
+    conn = get_connection(); c = conn.cursor()
+    c.execute("PRAGMA journal_mode=WAL")
 
     c.execute("""CREATE TABLE IF NOT EXISTS player_state (
         player_id TEXT PRIMARY KEY DEFAULT 'player',
@@ -237,7 +238,8 @@ def init_db():
     )""")
     c.execute("""CREATE TABLE IF NOT EXISTS gpa_history (
         id INTEGER PRIMARY KEY AUTOINCREMENT, semester_index INTEGER NOT NULL,
-        semester_gpa REAL NOT NULL, cumulative_gpa REAL NOT NULL, detail TEXT DEFAULT '{}'
+        semester_gpa REAL NOT NULL, cumulative_gpa REAL NOT NULL, detail TEXT DEFAULT '{}',
+        UNIQUE(semester_index)
     )""")
 
     # ★ v2.2: 用餐记录（按 day_block + meal_type 幂等）
@@ -262,6 +264,7 @@ def init_db():
     conn.commit(); conn.close()
     _ensure_player_exists(); _ensure_unlock_flags(); _seed_courses()
     _migrate_add_gpa_committed()
+    _migrate_gpa_history_unique()
 
 def _migrate_add_gpa_committed():
     """为旧库添加 gpa_committed 列（如果不存在）"""
@@ -273,8 +276,22 @@ def _migrate_add_gpa_committed():
         conn.commit()
     conn.close()
 
+def _migrate_gpa_history_unique():
+    """旧数据库可能含重复学期记录；保留最新一条并建立唯一索引。"""
+    conn = get_connection(); c = conn.cursor()
+    c.execute("""DELETE FROM gpa_history
+                 WHERE id NOT IN (
+                     SELECT MAX(id) FROM gpa_history GROUP BY semester_index
+                 )""")
+    c.execute("""CREATE UNIQUE INDEX IF NOT EXISTS
+                 idx_gpa_history_semester ON gpa_history(semester_index)""")
+    conn.commit(); conn.close()
+
 def get_connection():
-    return sqlite3.connect(DB_NAME)
+    conn = sqlite3.connect(DB_NAME, timeout=5.0)
+    conn.execute("PRAGMA foreign_keys=ON")
+    conn.execute("PRAGMA busy_timeout=5000")
+    return conn
 
 # ═══════════════════════════════════════════
 # 玩家状态
@@ -398,55 +415,98 @@ def semester_transition(old_sem: int) -> Tuple[float, dict]:
     学期交割：冻结旧课 → 重算累计GPA → 清空旧课表 → 写入gpa_committed
     返回 (new_cumulative_gpa, detail_dict)
     """
+    if old_sem < 0 or old_sem >= TOTAL_SEMESTERS:
+        raise ValueError(f"无效的学期索引: {old_sem}")
+
     conn = get_connection(); c = conn.cursor()
+    try:
+        # 串行化交割，避免两个请求同时重复累计挂科学分。
+        c.execute("BEGIN IMMEDIATE")
+        existing = c.execute(
+            """SELECT cumulative_gpa, detail FROM gpa_history
+               WHERE semester_index=? LIMIT 1""",
+            (old_sem,),
+        ).fetchone()
+        if existing:
+            conn.commit(); conn.close()
+            return existing[0], json.loads(existing[1] or "{}")
 
-    # 1. 冻结上学期课程：写入 mastery_final，标记 status='finished'
-    c.execute("""UPDATE player_courses SET mastery_final = mastery, status = 'finished'
-                 WHERE semester_index = ? AND status = 'active'""", (old_sem,))
+        # 1. 冻结本学期课程。
+        c.execute("""UPDATE player_courses SET mastery_final = mastery, status = 'finished'
+                     WHERE semester_index = ? AND status = 'active'""", (old_sem,))
 
-    # 2. 计算不及格学分
-    c.execute("""SELECT COALESCE(pc.mastery_final, pc.mastery) as m, co.credits
-                 FROM player_courses pc JOIN courses co ON pc.course_id = co.course_id
-                 WHERE pc.semester_index = ?""", (old_sem,))
-    rows = c.fetchall()
-    failed = sum(cr for m, cr in rows if mastery_to_grade_point(m) == 0.0)
-    if failed > 0:
-        c.execute("UPDATE player_state SET failed_credits = failed_credits + ? WHERE player_id='player'", (failed,))
+        # 2. 只用本学期课程计算本学期结果和详情。
+        sem_rows = c.execute(
+            """SELECT COALESCE(pc.mastery_final, pc.mastery), co.credits, co.course_name
+               FROM player_courses pc JOIN courses co ON pc.course_id = co.course_id
+               WHERE pc.semester_index = ?""",
+            (old_sem,),
+        ).fetchall()
+        failed = sum(cr for m, cr, _ in sem_rows if mastery_to_grade_point(m) == 0.0)
+        if failed > 0:
+            c.execute(
+                """UPDATE player_state SET failed_credits = failed_credits + ?
+                   WHERE player_id='player'""",
+                (failed,),
+            )
 
-    # 3. 重算累计GPA（含所有历史课程）
-    c.execute("""SELECT COALESCE(pc.mastery_final, pc.mastery) as m, co.credits, co.course_name
-                 FROM player_courses pc JOIN courses co ON pc.course_id = co.course_id""")
-    all_rows = c.fetchall()
-    detail = {}
-    tp = 0.0; tc = 0
-    for m, cr, cname in all_rows:
-        gp = mastery_to_grade_point(m)
-        detail[cname] = {"mastery": m, "grade_point": gp, "credits": cr}
-        tp += gp * cr; tc += cr
-    cum_gpa = round(tp / tc, 2) if tc > 0 else 0.0
+        detail = {}
+        sem_tp = 0.0; sem_tc = 0
+        for mastery, credits, course_name in sem_rows:
+            grade_point = mastery_to_grade_point(mastery)
+            detail[course_name] = {
+                "mastery": mastery,
+                "grade_point": grade_point,
+                "credits": credits,
+            }
+            sem_tp += grade_point * credits
+            sem_tc += credits
+        sem_gpa = round(sem_tp / sem_tc, 2) if sem_tc > 0 else 0.0
 
-    # 4. 写入 gpa_committed
-    c.execute("UPDATE player_state SET gpa_committed = ? WHERE player_id='player'", (cum_gpa,))
+        # 3. 累计 GPA 只包含已经交割完成的课程，不能混入新学期活跃课程。
+        finished_rows = c.execute(
+            """SELECT COALESCE(pc.mastery_final, pc.mastery), co.credits
+               FROM player_courses pc JOIN courses co ON pc.course_id = co.course_id
+               WHERE pc.status = 'finished'"""
+        ).fetchall()
+        total_points = sum(mastery_to_grade_point(m) * cr for m, cr in finished_rows)
+        total_credits = sum(cr for _, cr in finished_rows)
+        cumulative_gpa = round(total_points / total_credits, 2) if total_credits > 0 else 0.0
 
-    # 5. 清空上学期课表 slot
-    c.execute("DELETE FROM course_schedule WHERE semester_index = ?", (old_sem,))
+        c.execute(
+            "UPDATE player_state SET gpa_committed = ? WHERE player_id='player'",
+            (cumulative_gpa,),
+        )
+        c.execute("DELETE FROM course_schedule WHERE semester_index = ?", (old_sem,))
+        c.execute(
+            """INSERT INTO gpa_history
+               (semester_index, semester_gpa, cumulative_gpa, detail)
+               VALUES (?,?,?,?)""",
+            (old_sem, sem_gpa, cumulative_gpa, json.dumps(detail, ensure_ascii=False)),
+        )
+        conn.commit(); conn.close()
+        return cumulative_gpa, detail
+    except Exception:
+        conn.rollback(); conn.close()
+        raise
 
-    # 6. 记录 GPA 历史
-    # 计算本学期单独GPA
-    sem_rows = [(m, cr) for m, cr, _ in all_rows]  # 简化：用全量
-    c.execute("""SELECT COALESCE(pc.mastery_final, pc.mastery) as m, co.credits
-                 FROM player_courses pc JOIN courses co ON pc.course_id = co.course_id
-                 WHERE pc.semester_index = ?""", (old_sem,))
-    sem_only = c.fetchall()
-    sem_tp = sum(mastery_to_grade_point(m) * cr for m, cr in sem_only)
-    sem_tc = sum(cr for _, cr in sem_only)
-    sem_gpa = round(sem_tp / sem_tc, 2) if sem_tc > 0 else 0.0
-
-    c.execute("INSERT OR REPLACE INTO gpa_history (semester_index, semester_gpa, cumulative_gpa, detail) VALUES (?,?,?,?)",
-              (old_sem, sem_gpa, cum_gpa, json.dumps(detail, ensure_ascii=False)))
-
-    conn.commit(); conn.close()
-    return cum_gpa, detail
+def get_pending_semester_transition() -> Optional[int]:
+    """返回最早一个已经结束、仍有活跃课程且尚未交割的学期。"""
+    time_info = time_info_from_minutes(get_current_game_minutes())
+    latest_finished = time_info["semester_index"] if time_info["is_game_over"] else time_info["semester_index"] - 1
+    if latest_finished < 0:
+        return None
+    conn = get_connection(); c = conn.cursor()
+    row = c.execute(
+        """SELECT MIN(pc.semester_index)
+           FROM player_courses pc
+           LEFT JOIN gpa_history gh ON gh.semester_index = pc.semester_index
+           WHERE pc.status='active' AND pc.semester_index <= ?
+             AND gh.semester_index IS NULL""",
+        (latest_finished,),
+    ).fetchone()
+    conn.close()
+    return row[0] if row and row[0] is not None else None
 
 # ═══════════════════════════════════════════
 # NPC
@@ -538,17 +598,46 @@ def select_course(course_id: str, schedule: List[dict], semester_index: int = No
         ti = time_info_from_minutes(get_current_game_minutes())
         semester_index = ti["semester_index"]
     conn = get_connection(); c = conn.cursor()
-    c.execute("SELECT course_id FROM courses WHERE course_id=?", (course_id,))
-    if not c.fetchone(): conn.close(); return False
-    # 检查是否已在本学期选过
-    c.execute("SELECT id FROM player_courses WHERE course_id=? AND semester_index=? AND status='active'",
-              (course_id, semester_index))
-    if c.fetchone(): conn.close(); return True  # 幂等
-    c.execute("INSERT INTO player_courses (course_id, semester_index) VALUES (?,?)", (course_id, semester_index))
-    for s in schedule:
-        c.execute("INSERT INTO course_schedule (course_id, semester_index, day_of_week, period) VALUES (?,?,?,?)",
-                  (course_id, semester_index, s["day_of_week"], s["period"]))
-    conn.commit(); conn.close(); return True
+    try:
+        c.execute("BEGIN IMMEDIATE")
+        c.execute(
+            """SELECT course_id FROM courses
+               WHERE course_id=? AND (semester_index=? OR (course_type='elective' AND semester_index=-1))""",
+            (course_id, semester_index),
+        )
+        if not c.fetchone():
+            conn.rollback(); conn.close(); return False
+        # 检查是否已在本学期选过。
+        c.execute(
+            """SELECT id FROM player_courses
+               WHERE course_id=? AND semester_index=? AND status='active'""",
+            (course_id, semester_index),
+        )
+        if c.fetchone():
+            conn.commit(); conn.close(); return True
+        # 同一学期的同一时段只能安排一门课。
+        for slot in schedule:
+            conflict = c.execute(
+                """SELECT 1 FROM course_schedule
+                   WHERE semester_index=? AND day_of_week=? AND period=? LIMIT 1""",
+                (semester_index, slot["day_of_week"], slot["period"]),
+            ).fetchone()
+            if conflict:
+                conn.rollback(); conn.close(); return False
+        c.execute(
+            "INSERT INTO player_courses (course_id, semester_index) VALUES (?,?)",
+            (course_id, semester_index),
+        )
+        for slot in schedule:
+            c.execute(
+                """INSERT INTO course_schedule
+                   (course_id, semester_index, day_of_week, period) VALUES (?,?,?,?)""",
+                (course_id, semester_index, slot["day_of_week"], slot["period"]),
+            )
+        conn.commit(); conn.close(); return True
+    except Exception:
+        conn.rollback(); conn.close()
+        raise
 
 def get_player_schedule(semester_index: int = None) -> List[dict]:
     """★ v2.2: 仅返回指定学期（默认当前学期）的课表"""

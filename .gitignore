@@ -7,6 +7,9 @@ docs/defense-presentation.pptx
 
 # Python
 __pycache__/
+.pytest_cache/
+.coverage
+htmlcov/
 *.pyc
 *.pyo
 source-code/backend/venv/
