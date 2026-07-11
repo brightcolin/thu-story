@@ -1,8 +1,8 @@
 # 前端对接说明 v2.2
 
-> 所有请求需带请求头 `X-Token: thustory`（除 `GET /` 和 `GET /health`）
+> 所有请求需带请求头 `X-Token: <API_TOKEN>`（除 `GET /` 和 `GET /health`）
 > Content-Type: `application/json`
-> 基地址示例：`http://39.105.203.179:8000`
+> 本地基地址示例：`http://localhost:8000`
 
 ---
 
@@ -90,6 +90,22 @@
 ---
 
 ## 二、各接口详细规格
+
+### POST /time/advance
+
+调试接口，`minutes` 必须为 `1` 到 `1110` 之间的整数。正常活动流程会自行推进时间，前端不应在活动完成后重复调用。
+
+### PATCH /player
+
+调试接口，按绝对值设置玩家属性，而不是应用增量。支持字段为 `energy`、`health`、`research_ability`、`social_ability`，取值范围均为 `0` 到 `100`。
+
+```json
+{"energy": 60, "health": 80}
+```
+
+### POST /courses/select
+
+`schedule` 至少包含一个时段；`day_of_week` 范围为 `0..6`，`period` 范围为 `1..4`。同一请求不能包含重复时段，同一学期也不能把两门课程安排在相同时段。只能选择当前学期课程或通用选修课。
 
 ### POST /activities/execute（★v2.2 更新：支持 flags）
 
@@ -218,7 +234,8 @@
 - 冻结上学期课程 → 计算累计GPA → 清空上学期课表 → 写入 `gpa_committed`
 - 交割后 `GET /courses/schedule` 返回空数组（新学期无课）
 - 交割后 `GET /player` 的 `gpa` 为更新后的累计GPA
-- 通常由活动系统中的时间推进自动触发，此接口用于手动/补偿调用
+- 通常由活动系统中的时间推进自动触发；手动调用只会处理最早一个已经结束且尚未交割的学期
+- 没有待交割学期时返回 `409`；底层交割逻辑按学期幂等，不会重复累计挂科学分
 
 ---
 

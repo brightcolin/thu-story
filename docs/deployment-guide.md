@@ -1,19 +1,22 @@
 # 后端部署说明 v2.2
 
-## 1. 服务器要求
+> [!WARNING]
+> 当前后端是单人、单 SQLite 存档设计。一个服务实例不应供多个互不信任的玩家共享。公网部署必须使用 HTTPS、更换默认令牌并限制跨域来源。
 
-- **推荐配置**：阿里云 ECS 2核4G（或更高），Ubuntu 22.04 / Windows Server
-- **Python**：3.10+
-- **端口**：8000（需在安全组/防火墙放行 TCP 8000）
-- **数据库**：SQLite（内嵌，无需额外安装）
+## 1. 环境要求
 
-## 2. 部署步骤
+- Python 3.10+
+- Linux 或 Windows Server；Linux 推荐使用 systemd
+- SQLite，无需额外数据库服务
+- 反向代理与 HTTPS，例如 Nginx + Let's Encrypt
 
-### 2.1 上传代码
+生产环境建议让 FastAPI 只监听 `127.0.0.1:8000`，由反向代理公开 443 端口。不要直接在云安全组中开放 8000。
 
-将以下 6 个文件上传到服务器目录（如 `/opt/thustory` 或 `C:\thustory_backend`）：
+## 2. 部署文件
 
-```
+将以下内容复制到服务器，例如 `/opt/thustory`：
+
+```text
 database.py
 activity_system.py
 main.py
@@ -22,51 +25,71 @@ requirements.txt
 .env.example
 ```
 
-### 2.2 创建虚拟环境并安装依赖
+创建环境并安装依赖：
 
 ```bash
 cd /opt/thustory
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
+cp .env.example .env
 ```
 
-Windows：
+Windows PowerShell 使用：
+
 ```powershell
 cd C:\thustory_backend
 python -m venv venv
-.\venv\Scripts\activate
+.\venv\Scripts\Activate.ps1
 pip install -r requirements.txt
+Copy-Item .env.example .env
 ```
 
-### 2.3 配置环境变量
+## 3. 环境变量
 
-```bash
-cp .env.example .env
-# 编辑 .env，填入实际值：
-# DEEPSEEK_API_KEY=sk-xxx
-# API_TOKEN=thustory
+生产环境至少应修改：
+
+```dotenv
+# 可选；留空时 NPC 使用离线降级回复
+DEEPSEEK_API_KEY=
+
+# 必须替换为随机长令牌，并与客户端配置一致
+API_TOKEN=replace-with-a-long-random-token
+
+HOST=127.0.0.1
+PORT=8000
+DEBUG=false
+QINGHUA_DB_PATH=/opt/thustory/data/qinghua_story.db
+
+# 改成实际前端来源；多个来源以逗号分隔
+ALLOWED_ORIGINS=https://game.example.com
 ```
 
-### 2.4 首次启动（初始化数据库）
+可用 Python 生成令牌：
 
 ```bash
-# 先删除旧数据库（如果从 v2.1 升级，表结构不兼容）
-rm -f qinghua_story.db
+python -c "import secrets; print(secrets.token_urlsafe(32))"
+```
 
-# 启动
+不要把实际 `.env`、DeepSeek 密钥或生产令牌提交到 Git。
+
+## 4. 首次启动与验证
+
+```bash
+mkdir -p /opt/thustory/data
 python main.py
 ```
 
-### 2.5 生产部署（使用 pm2 或 systemd）
+本机验证：
 
-**pm2（推荐，Windows/Linux 通用）：**
 ```bash
-pm2 start main.py --name thustory-api --interpreter ./venv/bin/python
-pm2 save
+curl http://127.0.0.1:8000/health
 ```
 
-**systemd（Linux）：**
+`/health` 不需要令牌；其他接口需要 `X-Token` 请求头。
+
+## 5. systemd 服务
+
 ```ini
 # /etc/systemd/system/thustory.service
 [Unit]
@@ -75,56 +98,78 @@ After=network.target
 
 [Service]
 Type=simple
-User=ubuntu
+User=thustory
+Group=thustory
 WorkingDirectory=/opt/thustory
-ExecStart=/opt/thustory/venv/bin/python main.py
+EnvironmentFile=/opt/thustory/.env
 Environment=PYTHONIOENCODING=utf-8
-Restart=always
+ExecStart=/opt/thustory/venv/bin/python /opt/thustory/main.py
+Restart=on-failure
+RestartSec=3
 
 [Install]
 WantedBy=multi-user.target
 ```
-```bash
-sudo systemctl enable thustory && sudo systemctl start thustory
-```
-
-## 3. 启动命令
 
 ```bash
-python main.py
+sudo systemctl daemon-reload
+sudo systemctl enable --now thustory
+sudo systemctl status thustory
 ```
 
-默认监听 `0.0.0.0:8000`，可通过 `.env` 中 `HOST`/`PORT` 修改。
+## 6. HTTPS 反向代理
 
-启动后访问 `http://服务器IP:8000/docs` 可查看 Swagger API 文档。
+下面是最小 Nginx 代理示例；证书可通过 Certbot 配置：
 
-## 4. 从 v2.1 升级注意事项
+```nginx
+server {
+    listen 443 ssl http2;
+    server_name api.example.com;
 
-v2.2 数据库新增了 `meal_log`、`penalty_log` 表，`player_state` 增加 `gpa_committed` 列，`player_courses` 和 `course_schedule` 增加 `semester_index` 列。
+    ssl_certificate /etc/letsencrypt/live/api.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/api.example.com/privkey.pem;
 
-**建议**：
-1. 备份旧数据库 `cp qinghua_story.db qinghua_story.db.bak`
-2. 删除旧数据库 `rm qinghua_story.db`
-3. 重启服务（自动创建新库结构）
-
-如果需要保留数据，代码中 `_migrate_add_gpa_committed()` 会自动为旧库添加缺失列，但 `player_courses` 表结构变化较大，建议重建。
-
-## 5. 常见问题
-
-### Q1: Windows 上 pm2 启动出现编码错误
+    location / {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+}
 ```
-UnicodeEncodeError: 'gbk' codec can't encode character
-```
-**解决**：启动前 `$env:PYTHONIOENCODING = "utf-8"`
 
-### Q2: 端口 8000 被占用
-```
-OSError: [Errno 98] Address already in use
-```
-**解决**：`lsof -i:8000` 找到进程并 kill，或在 `.env` 中改 `PORT=8001`
+客户端应配置 `https://api.example.com`，不要在生产环境启用 Unity 的全局明文 HTTP 许可。
 
-### Q3: API 返回 401
-检查请求头是否包含 `X-Token: thustory`（与 `.env` 中 `API_TOKEN` 一致）
+## 7. SQLite 备份与升级
 
-### Q4: 连不上服务器
-检查：1) pm2 状态 2) 安全组/防火墙是否放行 8000 端口 3) Windows 防火墙
+升级前先停止服务并备份数据库：
+
+```bash
+sudo systemctl stop thustory
+cp /opt/thustory/data/qinghua_story.db /opt/thustory/data/qinghua_story.db.bak
+sudo systemctl start thustory
+```
+
+从早期 v2.1 数据库升级时，代码会补充部分字段和索引，但课程表结构变化较大。比赛存档不需要保留时，最稳妥的方式仍是备份后重建数据库；需要保留存档时，应先在数据库副本上验证迁移。
+
+## 8. 常见问题
+
+### API 返回 401
+
+确认客户端的 `X-Token` 与服务端 `.env` 中的 `API_TOKEN` 完全一致。
+
+### NPC 只返回离线回复
+
+检查 `DEEPSEEK_API_KEY` 是否配置，并查看服务日志。没有密钥不会影响其他游戏功能。
+
+### SQLite 出现锁等待
+
+当前代码启用了 WAL、外键和 5 秒忙等待，但仍只适合单实例、低并发运行。不要同时启动多个写入同一数据库的后端进程。
+
+### Windows 控制台编码错误
+
+启动前设置：
+
+```powershell
+$env:PYTHONIOENCODING = "utf-8"
+```

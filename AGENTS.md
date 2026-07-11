@@ -11,8 +11,8 @@ This file provides persistent project guidance for coding agents working in this
 ```
 source-code/
   backend/          # Python FastAPI backend (4 files)
-  csharp-client/    # Unity C# scripts (~130 .cs files + API/ and Editor/ subdirs)
-game-build/         # Pre-built Windows executable (game.exe)
+  csharp-client/    # Unity C# script snapshot (~60 .cs files; not a complete Unity project)
+game-build/         # Local ignored Windows build; not included in GitHub clones
 docs/               # Design docs: game-systems-design.md, frontend-api-guide.md, deployment-guide.md
 media/              # Screenshots and videos
 ```
@@ -28,15 +28,15 @@ python -m venv venv
 .\venv\Scripts\activate
 pip install -r requirements.txt
 
-# Configure environment (copy and fill in DEEPSEEK_API_KEY and API_TOKEN)
-# Create .env with:
-#   DEEPSEEK_API_KEY=sk-xxx
-#   API_TOKEN=thustory
+# Configure environment
+Copy-Item .env.example .env
+# Set a unique API_TOKEN. DEEPSEEK_API_KEY is optional; without it NPC chat uses fallback replies.
 
 # Run (listens on 0.0.0.0:8000)
 python main.py
 
 # Run tests
+pip install -r requirements-dev.txt
 pytest
 
 # API docs (while server is running): http://localhost:8000/docs
@@ -77,7 +77,8 @@ Source: `source-code/csharp-client/`
 
 Pre-built executable: `game-build/game.exe`
 
-**Central gateway:** `API/APIManager.cs` — all HTTP calls go through here. Hard-coded backend URL: `http://39.105.203.179:8000`, auth header `X-Token: thustory`. On startup it auto-resumes the server clock.
+**Central gateway:** `API/APIManager.cs` — all HTTP calls go through here. Local defaults can be overridden in the Inspector or with `THUSTORY_API_BASE` and `THUSTORY_API_TOKEN`. On startup it auto-resumes the server clock.
+**Repository limitation:** this repository contains only a Unity C# script snapshot, not the complete Unity project. Static C# changes can be reviewed here, but Unity compilation requires the original project assets and settings.
 
 **Module layout:**
 - `API/` — Backend integration: `BackendModelsV21.cs` (request/response models), `ApiTransport.cs` (HTTP transport), `ServerActivityFlow.cs`, `ServerAttendClassFlow.cs`, `ServerPauseCoordinator.cs` (per-feature flow controllers), plus schedule/penalty/social utilities
