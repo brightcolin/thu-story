@@ -9,7 +9,7 @@ using UnityEngine.Networking;
 namespace QinghuaStory
 {
     /// <summary>
-    /// 明文 HTTP：部分团结/Unity 版本在编辑器或播放器里仍会拦截 UnityWebRequest。
+    /// 明文 HTTP：部分平台/Unity 版本在编辑器或播放器里仍会拦截 UnityWebRequest。
     /// 在非 WebGL 真机构建下对 http:// 改用 HttpClient，便于与仅提供 HTTP 的后端联调。
     /// </summary>
     internal static class ApiTransport

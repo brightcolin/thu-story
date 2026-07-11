@@ -8,11 +8,12 @@ namespace QinghuaStory
     /// <summary>统一后端通信入口。可在场景中显式挂载，否则 PlayerManager 会创建。</summary>
     public class APIManager : MonoBehaviour
     {
-        public const string DefaultApiBase = "http://39.105.203.179:8000";
-        public const string ApiToken = "thustory";
+        public const string DefaultApiBase = "http://127.0.0.1:8000";
+        public const string DefaultApiToken = "local-dev-token-change-me";
 
         [Header("后端")]
         [SerializeField] private string apiBase = DefaultApiBase;
+        [SerializeField] private string apiToken = DefaultApiToken;
 
         [Header("v2.1 时间")]
         [Tooltip("后端存档重置后时钟默认不推进，需 POST /time/resume 后才会走表。启动时自动 Resume 一次。")]
@@ -20,9 +21,28 @@ namespace QinghuaStory
 
         public static APIManager Instance { get; private set; }
 
-        public static string ApiBase => Instance != null
-            ? Instance.apiBase.TrimEnd('/')
-            : DefaultApiBase.TrimEnd('/');
+        public static string ApiBase
+        {
+            get
+            {
+                string fromEnvironment = Environment.GetEnvironmentVariable("THUSTORY_API_BASE");
+                string configured = !string.IsNullOrWhiteSpace(fromEnvironment)
+                    ? fromEnvironment
+                    : Instance != null ? Instance.apiBase : DefaultApiBase;
+                return configured.TrimEnd('/');
+            }
+        }
+
+        public static string ApiToken
+        {
+            get
+            {
+                string fromEnvironment = Environment.GetEnvironmentVariable("THUSTORY_API_TOKEN");
+                return !string.IsNullOrWhiteSpace(fromEnvironment)
+                    ? fromEnvironment
+                    : Instance != null ? Instance.apiToken : DefaultApiToken;
+            }
+        }
 
         private void Awake()
         {

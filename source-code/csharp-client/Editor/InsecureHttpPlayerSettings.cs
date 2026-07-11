@@ -3,18 +3,18 @@ using UnityEditor;
 using UnityEngine;
 
 /// <summary>
-/// 每次刷新脚本后强制打开「允许 HTTP」，避免工程 YAML 与编辑器不同步导致 UnityWebRequest 仍拦截。
+/// 仅在开发者明确选择菜单命令时允许明文 HTTP；生产构建应使用 HTTPS。
 /// </summary>
-[InitializeOnLoad]
 public static class InsecureHttpPlayerSettings
 {
-    static InsecureHttpPlayerSettings()
+    [MenuItem("ThuStory/Enable HTTP for local development")]
+    private static void EnableForLocalDevelopment()
     {
         if (PlayerSettings.insecureHttpOption != InsecureHttpOption.AlwaysAllowed)
         {
             PlayerSettings.insecureHttpOption = InsecureHttpOption.AlwaysAllowed;
             Debug.Log(
-                "[InsecureHttpPlayerSettings] 已设置 PlayerSettings：Allow downloads over HTTP = Always allowed。");
+                "[InsecureHttpPlayerSettings] 已允许开发环境使用 HTTP。发布前请切换到 HTTPS 并关闭该选项。");
         }
     }
 }

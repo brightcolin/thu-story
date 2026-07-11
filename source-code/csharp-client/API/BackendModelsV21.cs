@@ -4,8 +4,8 @@ namespace QinghuaStory
 {
     // =========================================================
     //  v2.1 后端数据模型（字段名必须与 JSON 完全一致）
-    //  后端: http://39.105.203.179:8000
-    //  Header: X-Token: thustory
+    //  本地后端默认值: http://127.0.0.1:8000
+    //  Header: X-Token（由 APIManager Inspector 或 THUSTORY_API_TOKEN 配置）
     // =========================================================
 
     // ═══════════════════════════════════════
@@ -335,4 +335,3 @@ namespace QinghuaStory
         public EndingInfoV21[] endings;
     }
 }
-
