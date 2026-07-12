@@ -6,6 +6,8 @@ This file provides persistent project guidance for coding agents working in this
 
 "清华园物语" (Qinghua Garden Story) is a university life simulation game. Architecture: Unity C# frontend (thin client) + Python FastAPI backend (all game state and logic live server-side). Current backend version: **v2.2**.
 
+This is an archived competition project and is not under active feature development. Prefer small, clearly scoped maintenance and documentation fixes. Do not expand it into a production or multi-user system unless the user explicitly asks.
+
 ## Repository Layout
 
 ```
@@ -75,7 +77,7 @@ pytest
 
 Source: `source-code/csharp-client/`
 
-Pre-built executable: `game-build/game.exe`
+Local legacy executable: `game-build/game.exe` (ignored by Git, not rebuilt from the source snapshot, and may contain retired server configuration)
 
 **Central gateway:** `API/APIManager.cs` — all HTTP calls go through here. Local defaults can be overridden in the Inspector or with `THUSTORY_API_BASE` and `THUSTORY_API_TOKEN`. On startup it auto-resumes the server clock.
 **Repository limitation:** this repository contains only a Unity C# script snapshot, not the complete Unity project. Static C# changes can be reviewed here, but Unity compilation requires the original project assets and settings.
@@ -99,5 +101,6 @@ Pre-built executable: `game-build/game.exe`
 - **Penalty idempotency.** Both curfew and meal penalties use server-side logs (`penalty_log`, `meal_log` tables) to deduplicate — the client should call the penalty endpoint whenever the trigger condition is detected without worrying about double-application.
 - **Semester transitions** are triggered automatically by activity execution when the semester boundary is crossed; `POST /semester/transition` exists for manual/compensating calls.
 - **Energy/health zero events** use edge detection (only fires when value transitions from >0 to 0). Health zero takes priority over energy zero (hospitalisation skips 3 days; exhaustion skips 1). After either event both stats recover to 50.
-- **NPC dialogue** is generated at runtime by `npc_engine.py` via DeepSeek/OpenAI; set `DEEPSEEK_API_KEY` in `.env`.
-- **Production deployment** targets Aliyun ECS Ubuntu 22.04 with PM2 or systemd. See `docs/deployment-guide.md`. Upgrading from v2.1 requires dropping the old SQLite DB (schema is incompatible).
+- **NPC dialogue** is generated at runtime by `npc_engine.py` via DeepSeek/OpenAI when `DEEPSEEK_API_KEY` is configured; otherwise it uses fallback replies.
+- **Deployment is optional.** If the archived backend is redeployed, follow `docs/deployment-guide.md`: bind it behind HTTPS, use a unique token, back up SQLite first, and validate legacy database migration on a copy. Rebuilding an old v2.1 database is recommended when preserving its save data is unnecessary, but deletion is not an unconditional requirement.
+- **License scope:** original source code, automation, and associated technical documentation use the MIT License. `media/`, local builds, names, marks, and third-party materials are excluded as described in `NOTICE`.

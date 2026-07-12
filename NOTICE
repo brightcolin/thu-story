@@ -1,0 +1,22 @@
+ThuStory licensing notice
+==========================
+
+Copyright (c) 2026 ThuStory contributors:
+
+- brightcolin
+- zhangchee25-cloud
+- galaxy-3000
+
+The MIT License in LICENSE applies to the original source code, automation,
+and associated technical documentation in this repository.
+
+The following are not licensed under the MIT License:
+
+- media/, including screenshots and demonstration videos;
+- game-build/ and other compiled game artifacts;
+- project names, logos, visual identity, and institutional names or marks;
+- third-party assets or materials incorporated into demonstrations.
+
+Those excluded materials remain subject to the rights of their respective
+copyright, trademark, or other rights holders. No additional permission to
+reuse them is granted by this repository.
