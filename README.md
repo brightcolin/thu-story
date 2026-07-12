@@ -1,5 +1,11 @@
 # 清华园物语 · ThuStory
 
+[中文](README.md) | [English](README.en.md)
+
+![Project status: archived](https://img.shields.io/badge/status-archived-lightgrey.svg)
+[![Backend tests](https://github.com/brightcolin/thu-story/actions/workflows/backend-tests.yml/badge.svg)](https://github.com/brightcolin/thu-story/actions/workflows/backend-tests.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 > 清华大学软件设计大赛 **优胜奖** 作品
 
 一款以清华大学校园生活为背景的模拟养成游戏。玩家在四年八学期中管理精力、健康、GPA、科研与社工能力，与 NPC 建立关系，并走向不同结局。
