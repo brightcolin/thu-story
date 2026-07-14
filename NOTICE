@@ -18,6 +18,10 @@ The MIT License in LICENSE applies only to:
 For clarity, the phrase "associated documentation files" in the MIT License
 does not include the documentation and creative materials excluded below.
 
+Each revision of this repository is governed by the licensing notices
+distributed with that revision. The scope clarification introduced in commit
+6d05057 does not revoke permissions previously granted under earlier revisions.
+
 The following are not licensed under the MIT License:
 
 - README.md, README.zh-CN.md, AGENTS.md, CLAUDE.md, and docs/;

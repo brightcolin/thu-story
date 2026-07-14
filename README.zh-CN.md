@@ -4,7 +4,7 @@
 
 ![Project status: archived](https://img.shields.io/badge/status-archived-lightgrey.svg)
 [![Backend tests](https://github.com/brightcolin/thu-story/actions/workflows/backend-tests.yml/badge.svg)](https://github.com/brightcolin/thu-story/actions/workflows/backend-tests.yml)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Code License: MIT](https://img.shields.io/badge/code%20license-MIT-blue.svg)](NOTICE)
 
 > 清华大学软件设计大赛 **优胜奖** 作品
 

@@ -4,7 +4,7 @@ This file provides persistent project guidance for coding agents working in this
 
 ## Project Overview
 
-"清华园物语" (Qinghua Garden Story) is a university life simulation game. Architecture: Unity C# frontend (thin client) + Python FastAPI backend (all game state and logic live server-side). Current backend version: **v2.2**.
+"清华园物语" (Tsinghua Garden Story) is a university life simulation game. Architecture: Unity C# frontend (thin client) + Python FastAPI backend (all game state and logic live server-side). Current backend version: **v2.2**.
 
 This is an archived competition project and is not under active feature development. Prefer small, clearly scoped maintenance and documentation fixes. Do not expand it into a production or multi-user system unless the user explicitly asks.
 

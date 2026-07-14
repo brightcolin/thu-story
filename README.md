@@ -1,10 +1,10 @@
-# ThuStory · Qinghua Garden Story
+# ThuStory · Tsinghua Garden Story
 
 [English](README.md) | [中文](README.zh-CN.md)
 
 ![Project status: archived](https://img.shields.io/badge/status-archived-lightgrey.svg)
 [![Backend tests](https://github.com/brightcolin/thu-story/actions/workflows/backend-tests.yml/badge.svg)](https://github.com/brightcolin/thu-story/actions/workflows/backend-tests.yml)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Code License: MIT](https://img.shields.io/badge/code%20license-MIT-blue.svg)](NOTICE)
 
 > Merit Award project from the Tsinghua University Software Design Competition
 
